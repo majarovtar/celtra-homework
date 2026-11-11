@@ -135,16 +135,24 @@ jobs:
           docker tag app:runtime "registry.heroku.com/$HEROKU_APP_NAME/web"
           docker push "registry.heroku.com/$HEROKU_APP_NAME/web"
 
-      - name: Release the image
-        # Tells Heroku to run the pushed image as the "web" process
-        run: |
-          IMAGE_ID=$(docker inspect "registry.heroku.com/$HEROKU_APP_NAME/web" --format '{{.Id}}')
-          curl --silent --show-error --fail-with-body --request PATCH \
-            "https://api.heroku.com/apps/$HEROKU_APP_NAME/formation" \
-            --header "Content-Type: application/json" \
-            --header "Accept: application/vnd.heroku+json; version=3.docker-releases" \
-            --header "Authorization: Bearer $HEROKU_API_KEY" \
-            --data "{\"updates\":[{\"type\":\"web\",\"docker_image\":\"$IMAGE_ID\"}]}"
+          - name: Release the image
+          # Tells Heroku to run the pushed image as the "web" process.
+          # Heroku needs the image's config digest. Read it from the manifest stored
+          # in Heroku's registry, because the local image ID can differ from it
+          # depending on how Docker stores images on the runner.
+          run: |
+            IMAGE_ID=$(docker buildx imagetools inspect --raw "registry.heroku.com/$HEROKU_APP_NAME/web" | jq -r '.config.digest')
+            echo "Releasing image $IMAGE_ID"
+            if [ -z "$IMAGE_ID" ] || [ "$IMAGE_ID" = "null" ]; then
+              echo "::error::Could not read the image digest from the Heroku registry"
+              exit 1
+            fi
+            curl --silent --show-error --fail-with-body --request PATCH \
+              "https://api.heroku.com/apps/$HEROKU_APP_NAME/formation" \
+              --header "Content-Type: application/json" \
+              --header "Accept: application/vnd.heroku+json; version=3.docker-releases" \
+              --header "Authorization: Bearer $HEROKU_API_KEY" \
+              --data "{\"updates\":[{\"type\":\"web\",\"docker_image\":\"$IMAGE_ID\"}]}"
 
       - name: Check production after deploy
         # The new release can take a few seconds to start
