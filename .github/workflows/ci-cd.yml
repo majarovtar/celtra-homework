@@ -1,0 +1,159 @@
+# CI/CD pipeline: build -> test -> deploy
+#
+# - Pull requests run build + test only (nothing is deployed).
+# - Pushes to main run build + test, then deploy to Heroku if tests pass.
+#
+# Required repository settings (Settings -> Secrets and variables -> Actions):
+#   secret   HEROKU_API_KEY    Heroku API key
+#   variable HEROKU_APP_NAME   name of the Heroku app (stack must be "container")
+#   variable HEROKU_APP_URL    public URL of the app, e.g. https://app-1234.herokuapp.com
+
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Stage 1: build both images once and hand them to the next stages
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build test image
+        run: docker build --target test --tag app:test .
+
+      - name: Build production image
+        # Heroku runs linux/amd64 images
+        run: docker build --platform linux/amd64 --target runtime --tag app:runtime .
+
+      - name: Save images to a file
+        run: docker save app:test app:runtime --output images.tar
+
+      - name: Upload images for the next jobs
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: images
+          path: images.tar
+          retention-days: 1
+
+  # Stage 2: run tests against the images built in stage 1
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download images
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: images
+
+      - name: Load images
+        run: docker load --input images.tar
+
+      - name: Run unit tests
+        run: docker run --rm app:test
+
+      - name: Smoke test the production image
+        # Start the exact image that will be deployed and call the endpoint
+        run: |
+          docker run --detach --name smoke --env PORT=8000 --publish 8000:8000 app:runtime
+
+          # Wait until the server answers (up to 10 seconds)
+          for i in $(seq 1 10); do
+            if curl --silent --fail http://localhost:8000/smoke-test/data > response.json; then
+              break
+            fi
+            if [ "$i" -eq 10 ]; then
+              echo "::error::Server did not respond within 10 seconds"
+              exit 1
+            fi
+            sleep 1
+          done
+
+          cat response.json
+          python3 -c "
+          import json
+          body = json.load(open('response.json'))
+          assert body['accountId'] == 'smoke-test', body
+          assert body['timestamp'].endswith('Z'), body
+          assert body['data'], body
+          print('Smoke test passed')
+          "
+
+      - name: Show container logs if the smoke test failed
+        if: failure()
+        run: docker logs smoke || true
+
+  # Stage 3: deploy to production, only from main and only if tests passed
+  deploy:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    # Never run two deploys at the same time; a newer one waits for the older
+    concurrency:
+      group: production
+      cancel-in-progress: false
+    env:
+      HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+      HEROKU_APP_NAME: ${{ vars.HEROKU_APP_NAME }}
+      HEROKU_APP_URL: ${{ vars.HEROKU_APP_URL }}
+    steps:
+      - name: Check required settings
+        # Fail early with a clear message
+        run: |
+          missing=0
+          for name in HEROKU_API_KEY HEROKU_APP_NAME HEROKU_APP_URL; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name is not set in the repository settings"
+              missing=1
+            fi
+          done
+          exit $missing
+
+      - name: Download images
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: images
+
+      - name: Load images
+        run: docker load --input images.tar
+
+      - name: Log in to Heroku Container Registry
+        run: echo "$HEROKU_API_KEY" | docker login registry.heroku.com --username _ --password-stdin
+
+      - name: Push the tested image to Heroku
+        run: |
+          docker tag app:runtime "registry.heroku.com/$HEROKU_APP_NAME/web"
+          docker push "registry.heroku.com/$HEROKU_APP_NAME/web"
+
+      - name: Release the image
+        # Tells Heroku to run the pushed image as the "web" process
+        run: |
+          IMAGE_ID=$(docker inspect "registry.heroku.com/$HEROKU_APP_NAME/web" --format '{{.Id}}')
+          curl --silent --show-error --fail-with-body --request PATCH \
+            "https://api.heroku.com/apps/$HEROKU_APP_NAME/formation" \
+            --header "Content-Type: application/json" \
+            --header "Accept: application/vnd.heroku+json; version=3.docker-releases" \
+            --header "Authorization: Bearer $HEROKU_API_KEY" \
+            --data "{\"updates\":[{\"type\":\"web\",\"docker_image\":\"$IMAGE_ID\"}]}"
+
+      - name: Check production after deploy
+        # The new release can take a few seconds to start
+        run: |
+          for i in $(seq 1 12); do
+            if curl --silent --fail "$HEROKU_APP_URL/post-deploy-check/data"; then
+              echo
+              echo "Production is up"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Production did not respond after deploy"
+          exit 1
