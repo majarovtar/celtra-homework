@@ -113,7 +113,7 @@ The pipeline is a GitHub Actions workflow in `.github/workflows/ci-cd.yml`. It r
 - **Smoke test:** starts the **production** image, waits until it answers (up to 10 seconds), calls the endpoint and checks the response. If it fails, a separate step prints the container logs.
 
 ### Decisions
-- **Added a smoke test.** The smoke test checks the deployable artifact: the Dockerfile's `CMD`, gunicorn, `$PORT` handling and the non-root user. For example, gunicorn missing from `requirements.txt` would pass the unit tests but fail the smoke test, before reaching production.
+- **Added a smoke test.** The smoke test checks the deployable artifact. For example, gunicorn missing from `requirements.txt` would pass the unit tests but fail the smoke test, before reaching production.
 - **Actions pinned to commit SHAs** Prevents a software supply chain attack through moving the tag.
 
 ### Documentation
@@ -135,6 +135,8 @@ The pipeline is a GitHub Actions workflow in `.github/workflows/ci-cd.yml`. It r
 
 
 ![no_secrets](image-2.png)
+<img width="1470" height="750" alt="Screenshot 2026-11-12 at 12 57 53" src="https://github.com/user-attachments/assets/f9370d9d-7847-4187-9b47-6b9693b50cfb" />
+
 
 ### Decisions
 - **Credentials in a GitHub environment (`production`).** The Heroku API key is a secret in the `production` environment, so only the deploy job can read it.
@@ -152,19 +154,18 @@ The pipeline is a GitHub Actions workflow in `.github/workflows/ci-cd.yml`. It r
 ## Observability
 
 ### Uptime monitoring with Grafana Cloud Synthetic Monitoring
-An HTTP check calls `/uptime-check/data` on production:
-
-| Setting | Value | Why |
-|---|---|---|
-| Probes | Frankfurt and North Virginia | Virginia is next to the app (Heroku's US region runs on AWS in Virginia); Frankfurt shows what users in Europe experience |
-| Frequency | every 2 minutes |  |
-| Validation | status 2xx, HTTPS required, body must contain `"accountId":"uptime-check"` | the check fails if the app answers with the wrong content, not only if it is down |
+An HTTP check calls `/uptime-check/data` on production. It has 2 probes (US and Europe), and probes every two minutes.
 
 In a bigger project, we could use OpenTelemetry with Prometheus. We could then build dashboards, metrics, SLOs and alerts. 
+
+<img width="1159" height="720" alt="Screenshot 2026-11-12 at 13 04 15" src="https://github.com/user-attachments/assets/09dc4878-d6bf-4106-b536-5cb77d161985" />
 
 
 ### Logs
 Added a SolarWinds Papertrail Add-on to the Heroku app.
+
+<img width="1470" height="750" alt="Screenshot 2026-11-12 at 12 59 02" src="https://github.com/user-attachments/assets/0d3dd09b-36b0-482b-a70a-b271b4d0f7af" />
+
 
 ### Documentation
 - [Grafana Synthetic Monitoring: HTTP checks](https://grafana.com/docs/grafana-cloud/observe-and-act/testing/synthetic-monitoring/create-checks/checks/http/)
@@ -174,22 +175,21 @@ Added a SolarWinds Papertrail Add-on to the Heroku app.
 ## Known limitations
 
 - **Single dyno** If it crashes, restarts, or is replaced during a deploy, the service is briefly unavailable. A production setup with an SLA needs more than one instance with a load balancer.
-- **No staging environment.** Changes go straight from CI to production, as the assignment asks.
+- **No staging environment.** Changes go straight from CI to production.
 
 
 ---
 
 ## Further improvements
 
-1. **Automatic rollback** when the post-deploy check fails (on Heroku: `heroku releases:rollback` in a failure step).
-2. **Staging environment** with promotion of the same image to production (on Heroku: a second app and a Pipeline).
-3. **Automated dependency updates** (Dependabot or Renovate) for Python packages, the base image and the pinned action SHAs.
-4. **Locked dependencies** with `pyproject.toml` and a lock file (e.g. uv), so transitive dependencies are pinned too.
-5. **Application metrics** (request rate, errors, latency) exposed for Prometheus.
-6. **A runbook linked from each alert**, describing the first steps when it fires.
-7. **EU region** for users in Europe, based on the latency measured from Frankfurt.
-8. **A notification system for CI/CD** in e.g. Slack, so we can be notified there if a workflow failed.
+1. Automatic rollback when the post-deploy check fails (on Heroku: `heroku releases:rollback` in a failure step).
+2. Staging environment with promotion of the same image to production (on Heroku: a second app and a Pipeline).
+3. Automated dependency updates (Dependabot or Renovate) for Python packages, the base image and the pinned action SHAs.
+4. Locked dependencies with `pyproject.toml` and a lock file (e.g. uv), so transitive dependencies are pinned too.
+5. Application metrics (request rate, errors, latency) exposed for Prometheus.
+6. A runbook linked from each alert, describing the first steps when it fires.
+7. A notification system for CI/CD in e.g. Slack, so we can be notified there if a workflow failed.
 
 ## LLM usage
 
-I consulted a LLM (Claude) on parts of the homework; in steps that weren't as clear to me (the Docker image step as I haven't done it in a while, setting up Grafana, debugging deployment/Heroku issues), and for setting up the bones of the project.
+I consulted an LLM (Claude) on parts of the homework; in steps that weren't as clear to me (the Docker image step as I haven't done it in a while, setting up Grafana, debugging deployment/Heroku issues), and for setting up the bones of the project.
