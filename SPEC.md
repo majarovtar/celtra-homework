@@ -116,6 +116,9 @@ The pipeline is a GitHub Actions workflow in `.github/workflows/ci-cd.yml`. It r
 - **Added a smoke test.** The smoke test checks the deployable artifact. For example, gunicorn missing from `requirements.txt` would pass the unit tests but fail the smoke test, before reaching production.
 - **Actions pinned to commit SHAs** Prevents a software supply chain attack through moving the tag.
 
+<img width="905" height="435" alt="Screenshot 2026-11-12 at 13 15 30" src="https://github.com/user-attachments/assets/6e2ccba9-b3d9-47ee-8813-2f3b07f81255" />
+
+
 ### Documentation
 - [Workflow syntax for GitHub Actions](https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions)
 - [Storing workflow data as artifacts](https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts)
