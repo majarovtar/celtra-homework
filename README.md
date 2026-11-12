@@ -2,7 +2,9 @@
 
 A simple HTTP service that is tested, packaged in a Docker image and automatically deployed to production through a CI/CD pipeline on every push to `main`.
 
-**Available on:** https://celtra-homework-0d0b6b4c5457.herokuapp.com/demo/data
+The specification is in [SPEC.md](SPEC.md).
+
+Live app available on: https://celtra-homework-0d0b6b4c5457.herokuapp.com/demo/data
 
 Example of data returned:
 ```json
@@ -15,7 +17,7 @@ Example of data returned:
 
 Replace `demo` with any account ID.
 
-**The specification is in [SPEC.md](SPEC.md).**
+
 
 ## Stack
 
