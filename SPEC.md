@@ -192,6 +192,7 @@ Added a SolarWinds Papertrail Add-on to the Heroku app.
 5. Application metrics (request rate, errors, latency) exposed for Prometheus.
 6. A runbook linked from each alert, describing the first steps when it fires.
 7. A notification system for CI/CD in e.g. Slack, so we can be notified there if a workflow failed.
+8. Using hardened images, docker compose, E2E tests.
 
 ## LLM usage
 
