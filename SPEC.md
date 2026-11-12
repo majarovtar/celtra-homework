@@ -185,14 +185,15 @@ Added a SolarWinds Papertrail Add-on to the Heroku app.
 
 ## Further improvements
 
-1. Automatic rollback when the post-deploy check fails (on Heroku: `heroku releases:rollback` in a failure step).
-2. Staging environment with promotion of the same image to production (on Heroku: a second app and a Pipeline).
-3. Automated dependency updates (Dependabot or Renovate) for Python packages, the base image and the pinned action SHAs.
-4. Locked dependencies with `pyproject.toml` and a lock file (e.g. uv), so transitive dependencies are pinned too.
+1. Automatic rollback for failed deployments.
+2. Adding a Staging environment.
+3. Automated dependency updates (Dependabot or Renovate).
+4. Locked dependencies with `pyproject.toml` and a lock file.
 5. Application metrics (request rate, errors, latency) exposed for Prometheus.
 6. A runbook linked from each alert, describing the first steps when it fires.
 7. A notification system for CI/CD in e.g. Slack, so we can be notified there if a workflow failed.
 8. Using hardened images, docker compose, E2E tests.
+9. Separating CI and CD workflows.
 
 ## LLM usage
 
